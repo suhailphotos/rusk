@@ -1,0 +1,9 @@
+[package]
+name = "rusk"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Hands-on Rust topic playground with runnable demos & tests."
+
+[dev-dependencies]
+pretty_assertions = "1"
