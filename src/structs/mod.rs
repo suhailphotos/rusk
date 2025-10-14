@@ -21,9 +21,9 @@ pub fn area_ref(r: &Rect) -> u32 { r.w * r.h }
 
 pub fn demo() {
     let mut r = Rect { w: 30, h: 50 };
-    println!("Area:\n (method): {}", r.area());
-    println!("area (free): {}", area_ref(&r));
-    println!("rect (debug): {:?}", r);
+    println!("Area (method): {}", r.area());
+    println!("Area (free): {}", area_ref(&r));
+    println!("Rect (debug): {:?}", r);
     r.make_square(20);
     println!("made square: {:?}, area={}", r, r.area());
     println!("Pretty:\n{:#?}", r);
