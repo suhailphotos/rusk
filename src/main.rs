@@ -1,6 +1,19 @@
+use std::io;
+
 fn main() {
-  let mut guess: String = "4".to_string();
-  println!("Initial value of guess{guess}");
-  guess = "5".to_string();
-  println!("The value of guess is {guess}");
+  println!("Let's play a guessing game.\nGuess a number:");
+  let mut guess = String::new();
+
+  io::stdin()
+    .read_line(&mut guess)
+    .expect("Failed to read the input!");
+
+  let guess: u32 = match guess.trim().parse() {
+    Ok(num) => num,
+    Err(e) => {
+      println!("I ran into this error {e}");
+      return;
+    },
+  };
+  println!("The number you gussed is {guess}")
 }
