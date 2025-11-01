@@ -1,33 +1,36 @@
-// Manual `Debug` for a simple struct
-// Purpose: show how `{:?}` dispatches to `std::fmt::Debug::fmt`
-// Commit (frozen reference):
+// ex02 — Deriving `Debug` + simple method (`area`)
+// Purpose: show that `#[derive(Debug)]` enables `{:?}` without manual impls.
 //
 // Key notes:
-// - Signature: `fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result`
-//   * `self` is read-only; `f` is mutable because we write into the buffer.
-// - `write!(f, ...)` returns `fmt::Result`; keep it as the tail expression (no semicolon).
-// - `{:?}` uses `Debug`; `{}` would require implementing `Display`.
-//
-// Expected run:
-//   cargo run
-//   → Its a rectangle with width: 32 & height: 93
+// - `#[derive(Debug)]` auto-implements `std::fmt::Debug` for `Rectangle`.
+//   This works because all fields (`u32`) already implement `Debug`.
+// - `{:#?}` would pretty-print; `{}` would NOT work unless you implement `Display`.
 
+#[derive(Debug)] // enables `println!("{:?}", rect1)` → Rectangle { width: 30, height: 50 }
 struct Rectangle {
-  width: u32,
-  height: u32,
+  width: u32,  // rectangle width (unsigned 32-bit)
+  height: u32, // rectangle height (unsigned 32-bit)
 }
 
-impl std::fmt::Debug for Rectangle {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "Its a rectangle with width: {} & height: {}", self.width, self.height)
+impl Rectangle {
+  // `&self` is an immutable borrow; we can read fields but not mutate.
+  // Returns area as `u32` (fits for these small values; in real apps consider overflow).
+  fn area(&self) -> u32 {
+    self.width * self.height
   }
 }
 
 fn main() {
+  // Construct a Rectangle literal by naming fields.
   let rect1 = Rectangle {
-    width: 32,
-    height: 93,
+    width: 30,
+    height: 50,
   };
 
-  println!("{rect1:?}");
+  // `{:?}` → uses the derived Debug impl for Rectangle.
+  // `\n` adds a newline. `{}` → uses Display for `u32` (built-in).
+  println!("Here is {:?}\nAnd its area is {}", rect1, rect1.area());
+  // Example output:
+  // Here is Rectangle { width: 30, height: 50 }
+  // And its area is 1500
 }
