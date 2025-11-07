@@ -1,17 +1,18 @@
-// ex06 — Outer attribute on a `let` binding
+// ex07 — Platform-specific value via `#[cfg]` on a `let` binding
 // What this shows:
-// - You can attach an *outer attribute* directly to a `let` statement.
-// - Here we use standard lints from the compiler to keep it simple.
-//   * `unused_variables`: allow an unused variable
-//   * `non_snake_case`: allow an uppercase variable name (normally warned)
-//
-// Pattern demonstrated:
-// #[some_attribute]
-// let PATTERN: Type = initializer_expression;
+// - Using outer attributes `#[cfg(...)]` on `let` to select a value at compile time.
+// - Both bindings use the same name and type; only one is compiled.
+// - Example chooses the HOME-like environment variable per OS, then reads it.
+
+use std::env;
 
 fn main() {
-    #[allow(unused_variables, non_snake_case)]
-    let ANSWER: i32 = 42;
+    #[cfg(target_os = "windows")]
+    let home_var: &str = "USERPROFILE";
 
-    println!("outer attribute on let: OK");
+    #[cfg(not(target_os = "windows"))]
+    let home_var: &str = "HOME";
+
+    let val = env::var(home_var).unwrap_or_else(|_| "<unset>".into());
+    println!("{home_var} = {val}");
 }
