@@ -1,18 +1,16 @@
-// ex07 — Platform-specific value via `#[cfg]` on a `let` binding
+// ex08 — `let-else` with Option<T> (no turbofish)
 // What this shows:
-// - Using outer attributes `#[cfg(...)]` on `let` to select a value at compile time.
-// - Both bindings use the same name and type; only one is compiled.
-// - Example chooses the HOME-like environment variable per OS, then reads it.
-
-use std::env;
+// - Use a type annotation on the binding to guide `parse()` instead of `::<T>`.
+// - Convert `Result<T, _>` → `Option<T>` via `.ok()`.
+// - Destructure with `let Some(x) = ... else { ... };` (else must diverge).
 
 fn main() {
-    #[cfg(target_os = "windows")]
-    let home_var: &str = "USERPROFILE";
+    let input = "42";
+    let maybe_value: Option<u32> = input.parse().ok();
 
-    #[cfg(not(target_os = "windows"))]
-    let home_var: &str = "HOME";
+    let Some(x) = maybe_value else {
+        panic!("expected a number, got None");
+    };
 
-    let val = env::var(home_var).unwrap_or_else(|_| "<unset>".into());
-    println!("{home_var} = {val}");
+    println!("Parsed value: {x}");
 }
