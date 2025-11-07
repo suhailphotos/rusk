@@ -1,27 +1,17 @@
-// Conditional variable assignment using an `if` expression.
+// ex06 — Outer attribute on a `let` binding
+// What this shows:
+// - You can attach an *outer attribute* directly to a `let` statement.
+// - Here we use standard lints from the compiler to keep it simple.
+//   * `unused_variables`: allow an unused variable
+//   * `non_snake_case`: allow an uppercase variable name (normally warned)
 //
-// General pattern:
-// let x: T = if condition {
-//     value_if_true
-// } else {
-//     value_if_false
-// };
-//
-// `T` (the explicit type annotation) is optional if the compiler can infer
-// the type from the values of both branches.
+// Pattern demonstrated:
+// #[some_attribute]
+// let PATTERN: Type = initializer_expression;
 
 fn main() {
-    let n = 7;
+    #[allow(unused_variables, non_snake_case)]
+    let ANSWER: i32 = 42;
 
-    // With explicit type annotation:
-    let description: &str = if n % 2 == 0 {
-        "even"
-    } else {
-        "odd"
-    };
-
-    // The same pattern with type inference (no explicit `T`):
-    let sign = if n >= 0 { "non-negative" } else { "negative" };
-
-    println!("n = {n}, description = {description}, sign = {sign}");
+    println!("outer attribute on let: OK");
 }
