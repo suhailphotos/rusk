@@ -1,157 +1,118 @@
-use std::error::Error;
-use std::fs::{self, OpenOptions};
-use std::io;
-use std::path::PathBuf;
+fn main() {
+  let text = "loren ipsum dolor sit amet";
 
-fn main() -> Result<(), Box<dyn Error>> {
-  // Demo setup: create a temporary file with known contents ("42")
-  // so we have a predictable Ok(...) value to work with.
-  let mut path: PathBuf = std::env::temp_dir();
-  path.push("rust_result_demo.txt");
-
-  fs::write(&path, "42")?;
+  let pos: Option<usize> = text.find('i');
 
   // --------------------------------------------------
-  // Reading a Result with `unwrap` and `expect`
+  // Unwrapping Option with a fallback:
+  //   - `unwrap_or(default_value)`
+  //   - `unwrap_or_else(|| compute_default())`
   // --------------------------------------------------
   //
   // Pattern:
-  //   let value = result.unwrap();
-  //   let value = result.expect("error message");
+  //   let value = opt.unwrap_or(fallback);
+  //   let value = opt.unwrap_or_else(|| fallback_computation());
   //
-  // - On Ok(T), returns the inner value T.
-  // - On Err(E), panics:
-  //     * `unwrap()` uses a generic panic message.
-  //     * `expect()` uses your custom error message.
-  // - Best suited for quick demos, tests, or truly unrecoverable errors.
-  let s1 = fs::read_to_string(&path).unwrap();
-  let _ = fs::read_to_string(&path).expect("failed to read file");
-  println!("A) unwrap: s1 = {:?}", s1);
-
+  // - On Some(v), both return v.
+  // - On None:
+  //     * `unwrap_or` returns the eagerly-provided fallback value.
+  //     * `unwrap_or_else` calls the closure to compute a fallback.
+  let idx1: usize = pos.unwrap_or(0);
+  let idx2: usize = pos.unwrap_or_else(|| expensive_default_index());
+  println!("A) idx1 = {idx1}, idx2 = {idx2}");
 
   // --------------------------------------------------
-  // Providing a fallback with `unwrap_or` / `unwrap_or_else`
+  // Handling Option with `match`
   // --------------------------------------------------
   //
   // Pattern:
-  //   let value = result.unwrap_or(default_value);
-  //   let value = result.unwrap_or_else(|err| compute_from(err));
-  //
-  // - Both convert Result<T, E> into T by replacing Err(E) with a fallback.
-  // - `unwrap_or`:
-  //     * Takes a T value directly (eagerly evaluated).
-  // - `unwrap_or_else`:
-  //     * Takes a closure that receives the error E and computes a T (lazy).
-  let missing_path = path.with_file_name("this_file_does_not_exists.txt");
-  let s2 = fs::read_to_string(&missing_path).unwrap_or(String::from("fallback"));
-  let s3 = fs::read_to_string(&missing_path).unwrap_or_else(|_e| "computed fallback".to_string());
-  println!("B) unwrap_or: {:?}, unwrap_or_else: {:?}", s2, s3);
-
-  // --------------------------------------------------
-  // Handling Result with a `match` expression
-  // --------------------------------------------------
-  //
-  // Pattern:
-  //   let value = match expression_returning_result {
-  //       Ok(v) => v,         // success path, returns T
-  //       Err(e) => { ... }   // error path, must also produce a T
+  //   let value = match opt {
+  //       Some(v) => v,
+  //       None => fallback,
   //   };
   //
-  // - Gives you full control over both success and error cases.
-  // - Both arms must return the same type T.
-  let s4 = match fs::read_to_string(&path) {
-    Ok(text) => text,
-    Err(e) => {
-      eprintln!("C) read error: {e}");
-      String::new()
-    }
+  // - Explicitly handles both Some and None.
+  // - Both arms must produce the same type.
+  let idx3: usize = match pos {
+    Some(i) => i,
+    None => 0,
   };
-  println!("C) match: s4 = {:?}", s4);
+  println!("B) idx3 (match) = {idx3}");
 
   // --------------------------------------------------
-  // Reading a Result with `if let`
+  // Pattern-matching Option with `if let`
   // --------------------------------------------------
   //
   // Pattern:
-  //   if let Ok(value) = expression_returning_result {
-  //       // runs only on success; `value` is the inner T
+  //   if let Some(v) = opt {
+  //       // runs only when opt is Some(v)
   //   } else {
-  //       // runs on error; `value` is NOT in scope here
+  //       // runs when opt is None; `v` not in scope here
   //   }
   //
-  // - A concise way to handle only the Ok branch explicitly.
-  // - Common when the Err branch just logs or does simple fallback work.
-  // - Here we only care about the side effects (printing), so the
-  //   value of the `if let` expression itself is ignored.
-  if let Ok(text) = fs::read_to_string(&path) {
-    println!("D) if let Ok: {}", text.trim());
+  // - A concise way to handle the Some case and do something simple
+  //   in the None branch (like logging or fallback).
+  if let Some(i) = pos {
+    println!("C) found at index {i}");
   } else {
-    println!("D) if let Ok: fall back");
+    println!("C) not found, using fallback");
   }
 
   // --------------------------------------------------
-  // Propagating errors with the `?` operator
+  // Using `?` in a function that returns Option<T>
+  // --------------------------------------------------
+  //
+  // Pattern (inside an Option-returning function):
+  //   let v = expression_returning_option?;
+  //   // `v` is the inner T on Some(T),
+  //   // or the whole function returns None on None.
+  //
+  // - `?` short-circuits with None, instead of an error.
+  // - Keeps Option-based control flow linear and easy to read.
+  let doubled = find_and_double(text);
+  println!("D) doubled index via `?` in Option-returning fn = {:?}", doubled);
+
+  // --------------------------------------------------
+  // Converting Option<T> to Result<T, E> with `.ok_or(...)`
   // --------------------------------------------------
   //
   // Pattern:
-  //   let value = expression_returning_result?;
+  //   let res: Result<T, E> = opt.ok_or(err_value);
   //
-  // - On Ok(T), yields T.
-  // - On Err(E), returns Err(From::from(E)) from the current function.
-  // - The enclosing function must itself return a Result<_, _>.
-  // - Great for “bubbling up” errors and keeping code linear.
-  let s5 = fs::read_to_string(&path)?;
-  println!("E) `?` operator: s5 = {:?}", s5);
-
-  // --------------------------------------------------
-  // Converting Result<T, E> to Option<T> with `.ok()`
-  // --------------------------------------------------
+  // - Some(v) -> Ok(v)
+  // - None    -> Err(err_value)
   //
-  // Pattern:
-  //   let maybe = result.ok();              // Result<T, E> -> Option<T>
-  //   let value = maybe.unwrap_or_default(); // Option<T> -> T using T::default()
-  //
-  // - `.ok()` discards the error and keeps only the presence/absence of T.
-  // - `unwrap_or_default()`:
-  //     * On Some(t), returns t.
-  //     * On None, returns T::default().
-  let maybe_s = fs::read_to_string(&missing_path).ok();
-  let s6 = maybe_s.unwrap_or_default();
-  println!("F) ok() + unwrap_or_default(): {:?}", s6);
-
-  // --------------------------------------------------
-  // Inspecting error details and boxing as `Box<dyn Error>`
-  // --------------------------------------------------
-  //
-  // Pattern:
-  //   let res = expression_returning_result;
-  //   match res {
-  //       Ok(value) => { ... }
-  //       Err(e) => {
-  //           // inspect error (e.g. e.kind())
-  //           let boxed: Box<dyn Error> = e.into();
-  //       }
-  //   }
-  //
-  // - `io::Error::kind()` lets you branch on specific I/O error kinds.
-  // - Converting to `Box<dyn Error>` is useful for returning
-  //   heterogeneous errors via a common trait object.
-  let res = OpenOptions::new().write(true).create_new(true).open(&path);
-  match res {
-    Ok(_fh) => println!("G) unexpectedly created a new file"),
-    Err(e) => {
-      match e.kind() {
-        io::ErrorKind::AlreadyExists => println!("G) error kind = AlreadyExists (as expected)"),
-        io::ErrorKind::PermissionDenied => {
-          println!("G) error kind = PermissionDenied (e.g., locked on some platforms)")
-        }
-        other => println!("G) error kind = {:?}", other),
-      }
-
-      let boxed: Box<dyn Error> = e.into();
-      println!("G) boxed error: {}", boxed);
-    }
+  // Useful when an "absence of value" should become a proper error.
+  let idx_res: Result<usize, &'static str> = text.find('x').ok_or("char \"x\" not found");
+  match idx_res {
+    Ok(i) => println!("E) Ok -> index = {i}"),
+    Err(e) => println!("E) Err -> {e}"),
   }
 
-  Ok(())
+  // --------------------------------------------------
+  // Transforming the inner value of Option with `.map(...)`
+  // --------------------------------------------------
+  //
+  // Pattern:
+  //   let mapped: Option<U> = opt.map(|v| transform(v));
+  //
+  // - Some(v) -> Some(transform(v))
+  // - None    -> None
+  //
+  // Here:
+  //   - If `find('i')` returns Some(i), we slice from that index onward.
+  //   - If it returns None, the whole expression is None.
+  let after_i: Option<&str> = text.find('i').map(|i| &text[i..]);
+  println!("F) slice from 'i': {:?}", after_i);
+}
+
+// Example "expensive" fallback function used with `unwrap_or_else`.
+fn expensive_default_index() -> usize { 0 }
+
+// Demonstrates `?` in an Option-returning function:
+// - If `find('i')` returns Some(i), we return Some(i * 2).
+// - If it returns None, `?` makes the whole function return None.
+fn find_and_double(s: &str) -> Option<usize> {
+  let i = s.find('i')?;
+  Some(i * 2)
 }
