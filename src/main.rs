@@ -1,54 +1,74 @@
-// Fixing an Unsafe Program: Returning a Reference to the Stack
+// Fixing an Unsafe Program: Not Enough Permissions
 //
-// Original (unsafe / does not compile):
+// Original (does not compile):
 //
-// fn return_a_string() -> &String {
-//     let s = String::from("Hello world");
-//     &s  // ❌ returns a reference to a local (stack) value
+// fn stringify_name_with_title(name: &Vec<String>) -> String {
+//     // ❌ `name` is an immutable reference (`&Vec<String>`), so we only have read permission.
+//     //    `push` requires write permission (`W`), so the borrow checker rejects this.
+//     name.push(String::from("Esq."));
+//     let full = name.join(" ");
+//     full
 // }
 //
-// The fixes below all avoid returning a reference to a local `String`.
-// Each one chooses a different ownership / lifetime strategy.
+// If this were allowed, callers could observe surprising mutations or, worse,
+// have their existing references invalidated when `push` reallocates the Vec.
+//
+// Below are several *compiling* variants that each encode a different API choice.
 
-use std::rc::Rc;
-
-// 1) Move the owned `String` out of the function.
-//    Caller now owns and is responsible for deallocation.
-fn return_a_string_fix_a() -> String {
-    let s: String = String::from("Hello, world!");
-    s
+// 1) Mutate the input via &mut Vec<String>.
+//    This is legal, but semantically questionable for a function that sounds “read-only”.
+fn stringify_name_with_title_mutating(name: &mut Vec<String>) -> String {
+    name.push(String::from("Esq."));
+    let full = name.join(" ");
+    full
 }
 
-// 2) Return a string literal with a `'static` lifetime.
-//    The data is embedded in the binary and lives for the entire program.
-fn return_a_string_fix_b() -> &'static str {
-    "Hello, world!"
+// 2) Take ownership of the Vec<String>.
+//    Also legal, but often annoying to callers because they lose their Vec.
+fn stringify_name_with_title_taking_ownership(mut name: Vec<String>) -> String {
+    name.push(String::from("Esq."));
+    let full = name.join(" ");
+    // `name` is dropped here; caller cannot use it again.
+    full
 }
 
-// 3) Use reference counting (`Rc<String>`).
-//    Ownership is shared; deallocation happens when the last `Rc` is dropped.
-fn return_a_string_fix_c() -> Rc<String> {
-    let s = Rc::new(String::from("Hello, world!"));
-    Rc::clone(&s)
+// 3) Keep the original &Vec<String> API and clone the vector.
+//    Safe and explicit, but may copy more than needed for large inputs.
+fn stringify_name_with_title_clone(name: &Vec<String>) -> String {
+    let mut name_clone = name.clone();          // clone the Vec and all its Strings
+    name_clone.push(String::from("Esq."));      // mutate the local clone freely
+    let full = name_clone.join(" ");
+    full
 }
 
-// 4) Caller supplies a "slot" via `&mut String`.
-//    The function writes into the existing buffer instead of returning anything.
-fn return_a_string_fix_d(output: &mut String) {
-    // Replace the entire contents of `output` with the new text.
-    output.replace_range(.., "Hello, world!");
+// 4) Keep &Vec<String>, but avoid cloning the entire Vec.
+//    `join` already copies all strings into a new `String`, so we just append the suffix.
+fn stringify_name_with_title_suffix(name: &Vec<String>) -> String {
+    let mut full = name.join(" ");              // copies the pieces into one String
+    full.push_str(" Esq.");                     // append suffix to the result
+    full
 }
 
 fn main() {
-    println!("{}", return_a_string_fix_a());
-    println!("{}", return_a_string_fix_b());
-    println!("{}", return_a_string_fix_c());
+    // Demonstrate clone/suffix versions: input is not mutated and stays usable.
+    let name = vec![String::from("Ferris"), String::from("Jr.")];
 
-    // For the `&mut String` version, we:
-    // 1. Create an empty String we own,
-    // 2. Pass a mutable reference so the function can fill it,
-    // 3. Print the mutated value.
-    let mut s: String = String::new();
-    return_a_string_fix_d(&mut s);
-    println!("{s}");
+    let full_clone   = stringify_name_with_title_clone(&name);
+    let full_suffix  = stringify_name_with_title_suffix(&name);
+
+    println!("original name vec      : {:?}", name);
+    println!("clone() version        : {full_clone}");
+    println!("join + suffix version  : {full_suffix}");
+
+    // Demonstrate the &mut Vec<T> version: caller *does* observe mutation.
+    let mut name2 = vec![String::from("Ferris")];
+    let full_mut = stringify_name_with_title_mutating(&mut name2);
+    println!("mutating version       : {full_mut}");
+    println!("name2 after mutation   : {:?}", name2);
+
+    // Demonstrate the ownership-taking version:
+    let name3 = vec![String::from("Ferris")];
+    let full_owned = stringify_name_with_title_taking_ownership(name3);
+    println!("taking-ownership version: {full_owned}");
+    // `name3` cannot be used here; ownership was moved into the function.
 }
