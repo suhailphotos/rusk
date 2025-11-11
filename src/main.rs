@@ -1,109 +1,79 @@
-// Fixing an Unsafe Program: Aliasing and Mutating a Data Structure
+// Fixing an Unsafe Program: Copying vs. Moving Out of a Collection
 //
-// Original idea (does NOT compile and would be unsafe if it did):
+// When you read a value out of a collection, you have to be clear on whether
+// you are *copying* it or *moving* it. For `Copy` types like `i32`, a simple
+// read is fine. For non-`Copy` types like `String`, trying to move through a
+// shared reference is rejected by the compiler to prevent double-free bugs.
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 1) Safe: copying an i32 out of a Vec<i32>.
 //
-// fn add_big_strings(dst: &mut Vec<String>, src: &[String]) {
-//     // Find a reference to the largest String in `dst`.
-//     let largest: &String = dst.iter()
-//         .max_by_key(|s| s.len())
-//         .unwrap();
+// `i32` implements `Copy`, so reading through a shared reference just copies
+// the bits. No ownership is moved out of the Vec.
+fn copy_i32_from_vec() {
+    let v: Vec<i32> = vec![0, 1, 2];
+    let n_ref: &i32 = &v[0]; // shared reference into the vector
+    let n: i32 = *n_ref;     // copies the i32 value
+    println!("copy_i32_from_vec: v = {:?}, n = {}", v, n);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 2) Illegal (conceptually): moving a String out through a shared reference.
 //
-//     // ❌ Problem: `largest` is a reference into `dst`, but we also mutate `dst`
-//     // via `push`. A push may reallocate the Vec's buffer and move its contents,
-//     // which would invalidate `largest`.
-//     for s in src {
-//         if s.len() > largest.len() {
-//             dst.push(s.clone());
-//         }
-//     }
+// This is what the book shows *not* compiling:
+//
+// fn move_string_through_ref() {
+//     let v: Vec<String> = vec![String::from("Hello world")];
+//     let s_ref: &String = &v[0];
+//     let s: String = *s_ref; // ❌ cannot move out of `*s_ref` behind `&`
 // }
 //
-// The borrow checker rejects this because the immutable borrow (`largest`)
-// overlaps with a mutation of `dst` (`dst.push(..)`).
+// If this were allowed, both `v` and `s` would think they own the same String,
+// causing a double-free when both are dropped.
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Fix 1: Clone the largest String itself.
+// 3) Safe pattern A: just borrow the element as &String.
 //
-// We store an owned `String` instead of a `&String`, so the borrow of `dst`
-// ends as soon as `largest` is computed. The subsequent `push` no longer
-// overlaps with a borrow.
-fn add_big_strings_clone_largest(dst: &mut Vec<String>, src: &[String]) {
-    let largest: String = dst
-        .iter()
-        .max_by_key(|s| s.len())
-        .unwrap()
-        .clone(); // take ownership of a copy
-
-    for s in src {
-        if s.len() > largest.len() {
-            dst.push(s.clone());
-        }
-    }
+// We never take ownership of the String; we only look at it via a reference.
+fn borrow_string_from_vec() {
+    let v: Vec<String> = vec![String::from("Hello world")];
+    let s_ref: &String = &v[0];
+    println!("borrow_string_from_vec: {s_ref}!");
+    // v is still fully usable here.
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Fix 2: Collect the items to add into a temporary Vec, then extend `dst`.
+// 4) Safe pattern B (your example): clone the String.
 //
-// We keep a reference (`&String`) only while computing `to_add`. Once `to_add`
-// is built, the borrow of `dst` ends, and only then do we mutate `dst`.
-fn add_big_strings_collect(dst: &mut Vec<String>, src: &[String]) {
-    let largest: &String = dst
-        .iter()
-        .max_by_key(|s| s.len())
-        .unwrap();
-
-    let to_add: Vec<String> = src
-        .iter()
-        .filter(|s| s.len() > largest.len())
-        .cloned()
-        .collect();
-
-    dst.extend(to_add);
+// We explicitly clone the element so that we get our own owned `String`.
+// The Vec keeps its original element; no move happens through the reference.
+fn clone_string_from_vec() {
+    let v: Vec<String> = vec![String::from("Hello, World")];
+    let mut s: String = v[0].clone(); // allocate and copy the contents
+    s.push_str("!");
+    println!("clone_string_from_vec: s = {s}, v = {:?}", v);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Fix 3 (most idiomatic / performant): only keep the length.
+// 5) Safe pattern C: move the String out of the Vec with `remove`.
 //
-// We don't actually need a reference to the largest string, just its length.
-// By copying out `usize`, we completely avoid a long-lived borrow of `dst`
-// and can freely push while using `largest_len`.
-fn add_big_strings_len(dst: &mut Vec<String>, src: &[String]) {
-    let largest_len: usize = dst
-        .iter()
-        .max_by_key(|s| s.len())
-        .unwrap()
-        .len();
-
-    for s in src {
-        if s.len() > largest_len {
-            dst.push(s.clone());
-        }
-    }
+// Here we *do* move the element, but we do it through the Vec API itself.
+// After `remove`, that element no longer lives in the Vec; ownership is now
+// entirely in `s`.
+fn remove_string_from_vec() {
+    let mut v: Vec<String> = vec![String::from("Hello world")];
+    let mut s: String = v.remove(0); // moves the String out of the Vec
+    s.push('!');
+    println!("remove_string_from_vec: s = {s}, v = {:?}", v);
+    assert!(v.len() == 0);
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
 
 fn main() {
-    // Base data: a vector of words (dst) and a source slice (src).
-    let base: Vec<String> = [
-        "Lorem", "Ipsum", "is", "simply", "dummy",
-        "text", "of", "the", "printing",
-        "and", "typesetting", "industry.",
-    ]
-    .iter()
-    .map(|&w| w.to_string())
-    .collect();
-
-    let src: Vec<String> = vec!["Where does it come from?".to_string()];
-
-    // Use three separate dst vectors so we can see all variants.
-    let mut dst_clone   = base.clone();
-    let mut dst_collect = base.clone();
-    let mut dst_len     = base.clone();
-
-    add_big_strings_clone_largest(&mut dst_clone, &src);
-    add_big_strings_collect(&mut dst_collect, &src);
-    add_big_strings_len(&mut dst_len, &src);
-
-    println!("clone_largest : {:?}", dst_clone);
-    println!("collect+extend: {:?}", dst_collect);
-    println!("len-only      : {:?}", dst_len);
+    copy_i32_from_vec();
+    borrow_string_from_vec();
+    clone_string_from_vec();
+    remove_string_from_vec();
 }
+
