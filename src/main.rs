@@ -1,44 +1,58 @@
-// ex16: `&self`, method-call sugar, and when `&` is implied
-//
-// - `fn area(&self)` is sugar for `fn area(self: &Rectangle)`.
-// - `rect1.area()` desugars to `Rectangle::area(&rect1)` (auto-borrow).
-// - `(&rect1).area()` also works; parentheses are needed so `&` applies to
-//   `rect1` instead of the result of `.area()`.
-// - Inside the method, `self` is `&Rectangle`, but field/ops auto-deref/auto-ref,
-//   so the commented expressions all compile; the last line is the idiomatic one.
+use serde::Deserialize;
+use std::fs;
 
-#[derive(Debug)]
-struct Rectangle {
-  width: u32,
-  height: u32,
+#[derive(Debug, Deserialize)]
+struct Config {
+    databases: Databases,
 }
 
-impl Rectangle {
-  // fn area(self: &Rectangle) -> u32 {  // <--- explicit desugared form
-  fn area(&self) -> u32 {
-    // (&self).width * &self.height      // <--- compiles (auto-deref / auto-ref)
-    // &self.width * self.height         // <--- also compiles
-    // self.width * &self.height         // <--- also compiles
-    // (&self).width * (&self.height)    // <--- also compiles
-    self.width * self.height            // <--- idiomatic version
-  }
+#[derive(Debug, Deserialize)]
+struct Databases {
+    notion: NotionConfig,
+    supabase: SupabaseConfig,
+    postgres: PostgresConfig,
 }
 
-fn main() {
-  let rect1: Rectangle = Rectangle { width: 32, height: 84 };
+#[derive(Debug, Deserialize)]
+struct NotionConfig {
+    api_key: String,
+    database_id: String,
+}
 
-  // let area1: u32 = (&rect1).area();
-  // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  // Explicit reference to the receiver. Parentheses are required:
-  //   (&rect1).area()
-  // not:
-  //   &rect1.area()   // that would borrow the *result* of area()
+#[derive(Debug, Deserialize)]
+struct SupabaseConfig {
+    url: String,
+    anon_key: String,
+}
 
-  let area1: u32 = rect1.area(); // method-call sugar: Rectangle::area(&rect1)
+#[derive(Debug, Deserialize)]
+struct PostgresConfig {
+    host: String,
+    port: u16,
+    user: String,
+    password: String,
+    dbname: String,
+}
 
-  println!("The area of {:?} is {}", rect1, area1 );
-  //                    ^
-  //                    |
-  // `{:?}` uses the Debug formatter; #[derive(Debug)] auto-generates the
-  // `std::fmt::Debug` impl so this print works.
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let contents = fs::read_to_string("config.toml")?;
+    let config: Config = toml::from_str(&contents)?;
+
+    // Access every field at least once so there are no dead_code warnings.
+    println!("Notion API key:      {}", config.databases.notion.api_key);
+    println!("Notion database ID:  {}", config.databases.notion.database_id);
+
+    println!("Supabase URL:        {}", config.databases.supabase.url);
+    println!("Supabase anon key:   {}", config.databases.supabase.anon_key);
+
+    println!(
+        "Postgres: host={} port={} user={} db={} password={}",
+        config.databases.postgres.host,
+        config.databases.postgres.port,
+        config.databases.postgres.user,
+        config.databases.postgres.dbname,
+        config.databases.postgres.password,
+    );
+
+    Ok(())
 }

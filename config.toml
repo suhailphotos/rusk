@@ -1,0 +1,14 @@
+[databases.notion]
+api_key     = "notion-secret"
+database_id = "notion-db-id-123"
+
+[databases.supabase]
+url      = "https://xyzcompany.supabase.co"
+anon_key = "supabase-anon-key"
+
+[databases.postgres]
+host     = "localhost"
+port     = 5432
+user     = "postgres"
+password = "super-secret"
+dbname   = "my_app_db"
